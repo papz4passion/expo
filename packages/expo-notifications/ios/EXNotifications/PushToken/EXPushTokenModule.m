@@ -14,6 +14,7 @@ static NSString * const onDevicePushTokenEventName = @"onDevicePushToken";
 @property (nonatomic, assign) BOOL isListening;
 @property (nonatomic, assign) BOOL isBeingObserved;
 @property (nonatomic, assign) BOOL isSettlingPromise;
+@property (nonatomic, assign) NSString* token;
 
 @property (nonatomic, weak) id<EXEventEmitterService> eventEmitter;
 
@@ -58,6 +59,8 @@ EX_EXPORT_METHOD_AS(unregisterForNotificationsAsync,
 {
   _eventEmitter = [moduleRegistry getModuleImplementingProtocol:@protocol(EXEventEmitterService)];
   _pushTokenManager = [moduleRegistry getSingletonModuleForName:@"PushTokenManager"];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(didRecieveFCMToken:) name:@"EXDidRegisterForRemoteNotifications" object:nil];
+
 }
 
 # pragma mark - EXEventEmitter
@@ -97,20 +100,20 @@ EX_EXPORT_METHOD_AS(unregisterForNotificationsAsync,
 
 - (void)onDidRegisterWithDeviceToken:(NSData *)devicePushToken
 {
-  NSMutableString *stringToken = [NSMutableString string];
-  const char *bytes = [devicePushToken bytes];
-  for (int i = 0; i < [devicePushToken length]; i++) {
-    [stringToken appendFormat:@"%02.2hhx", bytes[i]];
-  }
+//  NSMutableString *stringToken = [NSMutableString string];
+//  const char *bytes = [devicePushToken bytes];
+//  for (int i = 0; i < [devicePushToken length]; i++) {
+//    [stringToken appendFormat:@"%02.2hhx", bytes[i]];
+//  }
 
-  if (_getDevicePushTokenResolver) {
-    _getDevicePushTokenResolver(stringToken);
+  if (_getDevicePushTokenResolver && _token) {
+    _getDevicePushTokenResolver(_token);
     [self onGetDevicePushTokenPromiseSettled];
   }
 
-  if (_isBeingObserved) {
+  if (_isBeingObserved && _token) {
     [_eventEmitter sendEventWithName:onDevicePushTokenEventName
-                                body:@{ @"devicePushToken": stringToken }];
+                                body:@{ @"devicePushToken": _token }];
   }
 }
 
@@ -135,6 +138,12 @@ EX_EXPORT_METHOD_AS(unregisterForNotificationsAsync,
   _getDevicePushTokenResolver = nil;
   _getDevicePushTokenRejecter = nil;
   [self setIsSettlingPromise:NO];
+}
+
+# pragma mark - FCMTokenListener
+- (void)didRecieveFCMToken:(NSNotification *) notification {
+    _token = notification.userInfo[@"fcmToken"];
+    
 }
 
 # pragma mark - Internal state
